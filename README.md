@@ -11,12 +11,12 @@ Unlike traditional RAG systems that rely on static databases, this project uses 
 
 The project is split into a modular backend and frontend to ensure scalability and ease of maintenance:
 
-* [cite_start]**Pathway Pipeline**: Orchestrates real-time data ingestion from GNews and manual user inputs, performing live embedding and indexing using the `SentenceTransformerEmbedder`. 
+* **Pathway Pipeline**: Orchestrates real-time data ingestion from GNews and manual user inputs, performing live embedding and indexing using the `SentenceTransformerEmbedder`. 
 * **Dual Vector Servers**: 
-    * [cite_start]**Port 8000**: Dedicated to the **GNews Scout** stream. 
-    * [cite_start]**Port 8001**: Dedicated to **User Memory** and internal data injections. 
-* [cite_start]**AI Engine**: Utilizes `gemini-2.5-flash-lite` to generate search keywords and synthesize final analytical reports. 
-* [cite_start]**Frontend**: A Gradio-based interface for querying the system and injecting "secret" knowledge into the live index. 
+    * **Port 8000**: Dedicated to the **GNews Scout** stream. 
+    * **Port 8001**: Dedicated to **User Memory** and internal data injections. 
+* **AI Engine**: Utilizes `gemini-2.5-flash-lite` to generate search keywords and synthesize final analytical reports. 
+* **Frontend**: A Gradio-based interface for querying the system and injecting "secret" knowledge into the live index. 
 
 ---
 
@@ -40,7 +40,7 @@ global-news-scout/
 ## Installation
 
 ### 1. Prerequisites
-* [cite_start]**Python 3.12 or 3.13** 
+* **Python 3.12 or 3.13** 
 * **Google Gemini API Key**
 * **Homebrew** (for macOS users)
 
