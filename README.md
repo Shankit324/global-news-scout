@@ -84,7 +84,7 @@ GEMINI_API_KEY=your_actual_api_key_here
 
 ---
 
-## 🚀 Running the Project
+## Running the Project
 
 1. **Clean Ports:** The system automatically attempts to clear ports `8000` and `8001` to prevent conflicts.
 2. **Execution:** To run the program, execute the following command on terminal:
