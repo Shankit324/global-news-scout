@@ -1,0 +1,59 @@
+# --- Python / Environment ---
+# Ignore the virtual environment folder
+.venv/
+venv/
+env/
+bin/
+lib/
+# Ignore compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Environment Variables / Secrets ---
+# Crucial: Never upload your Gemini API keys or credentials
+.env
+.env.local
+.env.*
+secrets.json
+
+# --- Project Specific Logs & Data ---
+# Ignore the local backend log file we created in the bash script
+backend_logs.txt
+# Ignore any local pathway data persistence or cache
+.pathway/
+pathway_cache/
+*.log
+
+# --- OS Specific Files ---
+# Ignore macOS system files (common on MacBook Air)
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# --- Build & Distribution ---
+# In case you build a wheel or package later
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+
+# --- IDE / Editors ---
+# Ignore VS Code specific workspace settings
+.vscode/
+# Ignore PyCharm settings
+.idea/
+
+# --- Temporary Files ---
+*.tmp
+*.temp
+*.swp

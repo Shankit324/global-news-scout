@@ -1,0 +1,14 @@
+# Web Frameworks and APIs
+fastapi
+uvicorn
+requests
+gradio
+
+# AI and LLM
+google-genai
+python-dotenv
+
+# Data Processing and Vector Search
+pathway
+gnews
+sentence-transformers
