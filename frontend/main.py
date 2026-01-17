@@ -1,7 +1,11 @@
 import gradio as gr
 import pathway as pw
+import os, sys
 # Ensure utils.py exists in the same directory or is in your PYTHONPATH
-from utils import handle_query, handle_injection 
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.main import handle_query, handle_injection 
 
 # --- CUSTOM THEME & CSS ---
 CUSTOM_CSS = """
