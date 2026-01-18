@@ -1,37 +1,28 @@
-# Use a stable Python 3.12 base
 FROM python:3.12-slim
 
-# Install system dependencies (Replaces your 'brew install' step)
+# 1. System Dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    pkg-config \
-    curl \
-    git \
+    build-essential cmake pkg-config curl git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install the specific pyarrow wheels your README mentions
+# 2. Optimized Pip Installs
 RUN pip install --upgrade pip
 RUN pip install --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pyarrow
 
-# Install Pathway and your requirements
+# Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install -U "pathway[xpack-llm, xpack-llm-docs]" litellm nest_asyncio
 RUN pip install -r requirements.txt
 
-# Pre-load the AI Model (Prevents startup timeout)
+# 3. Pre-load the AI Model (Prevents startup timeout)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-# Copy the rest of your code
 COPY . .
 
-# Ensure Python can find your 'backend' folder
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Expose the Gradio port
-EXPOSE 7860
-
-# Run the frontend script
-CMD ["python", "frontend/main.py"]
+# 4. Use the dynamic port assigned by Render
+CMD python frontend/main.py
