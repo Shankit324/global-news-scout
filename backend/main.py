@@ -123,10 +123,12 @@ def start_vector_servers():
     # News Server
     vector_store = VectorStoreServer(processed_news, embedder=embedder)
     threading.Thread(target=lambda: vector_store.run_server(host="0.0.0.0", port=PORT_NEWS), daemon=True).start()
+    threading.Thread(target=news_connector.run, daemon=True).start()
 
     # User Memory Server
     vs_user = VectorStoreServer(processed_user, embedder=embedder)
     threading.Thread(target=lambda: vs_user.run_server(host="0.0.0.0", port=PORT_USER), daemon=True).start()
+    threading.Thread(target=user_connector.run, daemon=True).start()
     
     print(f"PATHWAY SERVERS: Internal ports {PORT_NEWS} and {PORT_USER} are online.")
 
