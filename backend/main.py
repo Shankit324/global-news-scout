@@ -162,7 +162,9 @@ def run_scout_analyst(user_prompt):
         context = "\n".join([v['text'] for v in valid])
         unique_links = list({v['metadata']['url']: v for v in valid}.keys())[:3]
 
-        analyst_prompt = f"Using this context:\n{context}\n\nAnalyze '{user_prompt}' as a 2026 event."
+        # Final Report
+        analyst_prompt = f"Using this news context:\n{context}\n\n" \
+                         f"Analyze '{user_prompt}' as a 2026 event. Format with Sentiment, Hot Points, and Summary."
         report = client.models.generate_content(model=MODEL, contents=analyst_prompt)
 
         print(f"\n{report.text.strip()}\n")
