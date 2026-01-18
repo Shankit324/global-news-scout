@@ -21,6 +21,9 @@ COPY requirements.txt .
 RUN pip install -U "pathway[xpack-llm, xpack-llm-docs]" litellm nest_asyncio
 RUN pip install -r requirements.txt
 
+# Pre-load the AI Model (Prevents startup timeout)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 # Copy the rest of your code
 COPY . .
 
