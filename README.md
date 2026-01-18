@@ -30,7 +30,7 @@ global-news-scout/
 │   └── main.py         # Pathway logic and FastAPI server
 ├── frontend/
 │   └── main.py          # Gradio interface
-│   └── utils.py
+├── Dockerfile
 ├── requirements.txt    # Project dependencies            # Project documentation
 └── README.md
 ```

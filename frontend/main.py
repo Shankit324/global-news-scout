@@ -185,10 +185,10 @@ with gr.Blocks(
         outputs=inject_status
     )
 
-# Launch with full width allowed
-demo.launch(
-    server_name="0.0.0.0", 
-    server_port=7860, 
-    share=True,
-    inbrowser=True
-)
+# Launch
+if __name__ == "__main__":
+    demo.launch(
+        server_name="0.0.0.0", 
+        server_port=int(os.environ.get("PORT", 7860)),
+        share=False
+    )
