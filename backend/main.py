@@ -1,17 +1,19 @@
-import os, time, json, re, threading, sys, subprocess
+import os, time, json, re, threading, sys, io, requests
 import pathway as pw
 from gnews import GNews
 from pathway.xpacks.llm.embedders import SentenceTransformerEmbedder
 from pathway.xpacks.llm.vector_store import VectorStoreServer
 from dotenv import load_dotenv
 from google import genai
-import datetime, io
-import requests
+from contextlib import redirect_stdout
 
-# Load environment variables
+# Load environment variables (HF Secrets)
 load_dotenv()
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MODEL = "gemini-2.5-flash-lite"
+
+# Global Heartbeat Log for Frontend visibility
+system_heartbeat = "System Initializing...\n"
 
 # --- CONNECTORS ---
 
@@ -24,6 +26,7 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
         self._lock = threading.Lock()
 
     def update_queries(self, raw_list):
+        global system_heartbeat
         with self._lock:
             sanitized = []
             for q in raw_list:
@@ -31,9 +34,11 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
                 if clean and 3 < len(clean) < 60:
                     sanitized.append(clean)
             self.queries = sanitized if sanitized else ["Latest News"]
-            print(f"\n[SYSTEM]: Tracking {len(self.queries)} refined streams...")
+            msg = f"\n[SYSTEM]: Tracking {len(self.queries)} refined streams...\n"
+            system_heartbeat += msg
 
     def run(self):
+        global system_heartbeat
         while True:
             with self._lock:
                 active_qs = list(self.queries)
@@ -47,8 +52,10 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
                             ingested_at=float(time.time())
                         )
                         self.ingestion_count += 1
+                        # Log to heartbeat instead of stdout to keep terminal clean
+                        system_heartbeat = (system_heartbeat + f"Ingested: {item['title'][:50]}...\n")[-2000:]
                 except: continue
-            time.sleep(60) # Increased to 60s for Cloud Stability
+            time.sleep(60)
 
 class UserMemorySubject(pw.io.python.ConnectorSubject):
     def __init__(self):
@@ -61,7 +68,6 @@ class UserMemorySubject(pw.io.python.ConnectorSubject):
             if 'id' not in json_data:
                 json_data['id'] = f"mem_{int(time.time()*1000)}"
             self.pending_payloads.append(json_data)
-            print(f"[MEMORY]: Buffered '{json_data.get('title', 'Unknown')}'")
 
     def run(self):
         while True:
@@ -91,14 +97,12 @@ class UserSchema(pw.Schema):
     key: str
     ingested_at: float
 
-# STREAM: News
 raw_news = pw.io.python.read(news_connector, schema=NewsSchema, primary_key=["url"])
 processed_news = raw_news.filter(pw.this.ingested_at > (time.time() - 86400)).select(
     data=pw.this.data, 
     _metadata=pw.apply(lambda u: {"url": u}, pw.this.url)
 )
 
-# STREAM: User Memory
 def format_json_for_llm(json_str):
     try:
         obj = json.loads(json_str)
@@ -111,31 +115,32 @@ processed_user = raw_user.select(
     _metadata=pw.apply(lambda k: {"source": "User_JSON", "id": k}, pw.this.key)
 )
 
-# --- VECTOR SERVERS ---
+# --- ENGINE INITIALIZATION ---
 
 PORT_NEWS = 8000
 PORT_USER = 8001
-
-# Embedder initialization (Ensure this matches the pre-loaded model in Dockerfile)
 embedder = SentenceTransformerEmbedder(model="all-MiniLM-L6-v2")
 
-def start_vector_servers():
-    # News Server
-    vector_store = VectorStoreServer(processed_news, embedder=embedder)
-    threading.Thread(target=lambda: vector_store.run_server(host="0.0.0.0", port=PORT_NEWS), daemon=True).start()
-    threading.Thread(target=news_connector.run, daemon=True).start()
+def start_backend_engine():
+    # Start Vector Store Servers (Daemonized)
+    vs_news = VectorStoreServer(processed_news, embedder=embedder)
+    threading.Thread(target=lambda: vs_news.run_server(host="0.0.0.0", port=PORT_NEWS), daemon=True).start()
 
-    # User Memory Server
     vs_user = VectorStoreServer(processed_user, embedder=embedder)
     threading.Thread(target=lambda: vs_user.run_server(host="0.0.0.0", port=PORT_USER), daemon=True).start()
+
+    # Start Background Connectors
+    threading.Thread(target=news_connector.run, daemon=True).start()
     threading.Thread(target=user_connector.run, daemon=True).start()
     
-    print(f"PATHWAY SERVERS: Internal ports {PORT_NEWS} and {PORT_USER} are online.")
+    print(f"✅ Intelligence Engine Active on Ports {PORT_NEWS}/{PORT_USER}")
 
-# Start servers on module load
-start_vector_servers()
+# Auto-start on load
+if "ENGINE_LIVE" not in os.environ:
+    start_backend_engine()
+    os.environ["ENGINE_LIVE"] = "true"
 
-# --- ANALYST LOGIC ---
+# --- ANALYST & ROUTING LOGIC ---
 
 def run_scout_analyst(user_prompt):
     client = genai.Client(api_key=GEMINI_API_KEY)
@@ -147,75 +152,76 @@ def run_scout_analyst(user_prompt):
         clean_text = re.sub(r'```json|```', '', q_gen.text).strip()
         keywords = json.loads(clean_text)
         
-        initial_count = news_connector.ingestion_count
+        start_count = news_connector.ingestion_count
         news_connector.update_queries(keywords)
 
-        print("⏳ Hydrating Live Stream...")
-        time.sleep(15) # Wait for initial scrape
+        print("⏳ Waiting for initial intelligence sync...")
+    
+        # Wait until at least 3-5 new articles have been indexed
+        max_wait = 60  # Safety timeout
+        elapsed = 0
+        while news_connector.ingestion_count <= start_count + 3 and elapsed < max_wait:
+            time.sleep(2)
+            elapsed += 2
 
         r = requests.post(f"http://127.0.0.1:{PORT_NEWS}/v1/retrieve", json={"query": user_prompt, "k": 10})
         results = r.json()
 
         valid = [res for res in results if (1 - res.get('dist', 1.0)) > 0.55]
         if not valid:
-            print(f"DATA GAP: No fresh news found for '{user_prompt}'.")
+            print(f"DATA GAP: No fresh intelligence found for '{user_prompt}' in the last 24h.")
             return
 
         context = "\n".join([v['text'] for v in valid])
         unique_links = list({v['metadata']['url']: v for v in valid}.keys())[:3]
 
-        # Final Report
-        analyst_prompt = f"Using this news context:\n{context}\n\n" \
-                         f"Analyze '{user_prompt}' as a 2026 event. Format with Sentiment, Hot Points, and Summary."
-        report = client.models.generate_content(model=MODEL, contents=analyst_prompt)
+        report = client.models.generate_content(
+            model=MODEL, 
+            contents=f"Context:\n{context}\n\nAnalyze '{user_prompt}' with Sentiment, 3 hotpoints and a brief Summary."
+        )
 
         print(f"\n{report.text.strip()}\n")
         print("VERIFIED SOURCES:")
         for link in unique_links: print(f"  - {link}")
 
     except Exception as e:
-        print(f"Analyst Error: {e}")
+        print(f"System Error: {e}")
 
 def ask_oracle(query):
     client = genai.Client(api_key=GEMINI_API_KEY)
     context = ""
-    
-    # Internal Memory Check
     try:
         r_u = requests.post(f"http://127.0.0.1:{PORT_USER}/v1/retrieve", json={"query": query, "k": 2})
-        user_hits = r_u.json()
-        context += "--- MEMORY ---\n" + "\n".join([h['text'] for h in user_hits if h['dist'] < 0.6])
+        context += "--- MEMORY ---\n" + "\n".join([h['text'] for h in r_u.json() if h['dist'] < 0.6])
     except: pass
-
-    # News Check
     try:
         r_n = requests.post(f"http://127.0.0.1:{PORT_NEWS}/v1/retrieve", json={"query": query, "k": 3})
-        news_hits = r_n.json()
-        context += "\n--- NEWS ---\n" + "\n".join([h['text'] for h in news_hits])
+        context += "\n--- NEWS ---\n" + "\n".join([h['text'] for h in r_n.json()])
     except: pass
 
     if not context.strip():
-        print("No information found.")
+        print("No matching information found.")
         return
 
-    prompt = f"Answer based on context:\n{context}\n\nQUESTION: {query}"
-    resp = client.models.generate_content(model=MODEL, contents=prompt)
+    resp = client.models.generate_content(model=MODEL, contents=f"Answer based on:\n{context}\n\nQ: {query}")
     print(f"\n{resp.text.strip()}")
 
+# --- THREAD-SAFE GRADIO HANDLERS ---
+
 def handle_query(question, query_type):
-    # This wrapper is for Gradio consumption
-    buffer = io.StringIO()
-    sys.stdout = buffer
-    
-    if query_type == "Fact / Memory Query":
-        ask_oracle(question)
-    else:
-        run_scout_analyst(question)
-    
-    sys.stdout = sys.__stdout__
-    return buffer.getvalue()
+    f = io.StringIO()
+    # Uses context manager to prevent background thread prints from leaking into the report
+    with redirect_stdout(f):
+        if query_type == "Fact / Memory Query":
+            ask_oracle(question)
+        else:
+            run_scout_analyst(question)
+    return f.getvalue()
 
 def handle_injection(title, content, category):
     payload = {"title": title, "content": content, "category": category, "time": time.ctime()}
     user_connector.inject(payload)
-    return f"Success: '{title}' injected into live memory."
+    return f"Success: '{title}' injected."
+
+def get_heartbeat():
+    return system_heartbeat
