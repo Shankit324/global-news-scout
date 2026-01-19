@@ -34,7 +34,7 @@ footer { display: none !important; }
 with gr.Blocks(title="Global News Scout Console", fill_width=True) as demo:
 
     with gr.Row():
-        gr.Markdown("# 🛰️ Global News Scout: Intelligence Console")
+        gr.Markdown("# Global News Scout: Intelligence Console")
 
     with gr.Row(equal_height=True):
         with gr.Column(scale=1, min_width=300):
