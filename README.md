@@ -25,15 +25,19 @@ The project is split into a modular backend and frontend to ensure scalability a
 
 ```plaintext
 global-news-scout/
-├── .env                # Environment variables (API Keys)
-├── .venv/              # Python virtual environment
+├── .env               # Environment variables (API Keys)
+├── .venv/             # Python virtual environment
 ├── backend/
-│   └── main.py         # Pathway logic and FastAPI server
+│   ├── __init__.py
+│   └── main.py        # Pathway logic 
 ├── frontend/
-│   └── main.py          # Gradio interface
-├── Dockerfile
-├── requirements.txt    # Project dependencies            # Project documentation
-└── README.md
+│   ├── __init__.py
+│   └── main.py         # Gradio interface
+├── Docekerfile
+├── .dockerignore
+├── .gitignore
+├── requirements.txt    # Project dependencies            
+└── README.md           # Project documentation
 ```
 
 ---
