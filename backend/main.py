@@ -12,7 +12,7 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MODEL = "gemini-2.5-flash-lite"
 
-# Global Heartbeat Log for Frontend visibility
+# Global Heartbeat Log
 system_heartbeat = "Intelligence Engine Initializing...\n"
 
 # --- CONNECTORS ---
@@ -20,11 +20,10 @@ system_heartbeat = "Intelligence Engine Initializing...\n"
 class GlobalScoutSubject(pw.io.python.ConnectorSubject):
     def __init__(self):
         super().__init__()
-        # Optimization: period='1h' focuses on the absolute freshest 2026 intel
-        self.google_news = GNews(language='en', period='1h', max_results=20)
-        self.queries = ["Trump Board of Peace 2026", "Greenland Tariff News"]
+        self.google_news = GNews(language='en', max_results=20)
+        self.queries = ["Top Highlights"]
         self.ingestion_count = 0
-        self.seen_urls = set() # Local deduplication
+        self.seen_urls = set()
         self._lock = threading.Lock()
 
     def update_queries(self, raw_list):
@@ -45,9 +44,9 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
             with self._lock:
                 active_qs = list(self.queries)
             
-            # HYBRID FETCH: Priority Top Stories + Keyword Searches
             all_news = []
             try:
+                # Always grab top stories first for global context
                 all_news.extend(self.google_news.get_top_news())
             except: pass
 
@@ -56,7 +55,6 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
                     all_news.extend(self.google_news.get_news(q))
                 except: continue
             
-            # Process & Ingest
             for item in all_news:
                 url = item.get('url')
                 if url in self.seen_urls: continue
@@ -72,7 +70,6 @@ class GlobalScoutSubject(pw.io.python.ConnectorSubject):
                     system_heartbeat = (system_heartbeat + f"Ingested: {item['title'][:55]}...\n")[-2000:]
                 except: continue
 
-            # Keep set lean
             if len(self.seen_urls) > 1000: self.seen_urls.clear()
             time.sleep(60)
 
@@ -107,24 +104,16 @@ class NewsSchema(pw.Schema):
 class UserSchema(pw.Schema):
     data: str; key: str; ingested_at: float
 
-# Process News Stream
+# the system will retain all discovered news in the vector index.
 raw_news = pw.io.python.read(news_connector, schema=NewsSchema, primary_key=["url"])
-processed_news = raw_news.filter(pw.this.ingested_at > (time.time() - 86400)).select(
+processed_news = raw_news.select(
     data=pw.this.data, 
     _metadata=pw.apply(lambda u, t: {"url": u, "ingested_at": t}, pw.this.url, pw.this.ingested_at)
 )
 
-# Helper to format memory
-def format_json_for_llm(json_str):
-    try:
-        obj = json.loads(json_str)
-        return "USER MEMORY:\n" + "\n".join([f"{k.capitalize()}: {v}" for k,v in obj.items()])
-    except: return json_str
-
-# FIX: Changed 'schema=pw.Schema' to 'schema=UserSchema' to resolve KeyError
 raw_user = pw.io.python.read(user_connector, schema=UserSchema, primary_key=["key"])
 processed_user = raw_user.select(
-    data=pw.apply(format_json_for_llm, pw.this.data),
+    data=pw.apply(lambda d: d, pw.this.data),
     _metadata=pw.apply(lambda k: {"source": "User_JSON", "id": k}, pw.this.key)
 )
 
@@ -134,14 +123,10 @@ PORT_NEWS, PORT_USER = 8000, 8001
 embedder = SentenceTransformerEmbedder(model="all-MiniLM-L6-v2")
 
 def start_backend_engine():
-    # Start Vector Store Servers
     vs_news = VectorStoreServer(processed_news, embedder=embedder)
     threading.Thread(target=lambda: vs_news.run_server(host="0.0.0.0", port=PORT_NEWS), daemon=True).start()
-
     vs_user = VectorStoreServer(processed_user, embedder=embedder)
     threading.Thread(target=lambda: vs_user.run_server(host="0.0.0.0", port=PORT_USER), daemon=True).start()
-
-    # Start Background Connectors
     threading.Thread(target=news_connector.run, daemon=True).start()
     threading.Thread(target=user_connector.run, daemon=True).start()
     print(f"Intelligence Engine Active on Ports {PORT_NEWS}/{PORT_USER}")
@@ -169,9 +154,9 @@ def run_scout_analyst(user_prompt):
         while news_connector.ingestion_count <= start_count + 3 and elapsed < max_wait:
             time.sleep(2); elapsed += 2
         
-        time.sleep(3) # Indexing buffer
+        time.sleep(3) 
 
-        r = requests.post(f"http://127.0.0.1:{PORT_NEWS}/v1/retrieve", json={"query": user_prompt, "k": 25})
+        r = requests.post(f"http://127.0.0.1:{PORT_NEWS}/v1/retrieve", json={"query": user_prompt, "k": 30})
         results = r.json()
 
         now = time.time()
@@ -179,25 +164,31 @@ def run_scout_analyst(user_prompt):
         for res in results:
             semantic_sim = 1 - res.get('dist', 1.0)
             
-            # GATE 1: THE FLOOR (Ensure relevance)
-            if semantic_sim < 0.35: continue 
+            # --- GATE 1: THE RELEVANCE FLOOR ---
+            # Even for old news, it must be at least 30% related to be considered.
+            if semantic_sim < 0.30: continue 
 
-            # GATE 2: RECENCY PRIORITY
+            # --- GATE 2: RECENCY DECAY ---
             t_stamp = res.get('metadata', {}).get('ingested_at', now)
             age_hours = (now - t_stamp) / 3600
-            recency_multiplier = max(0.5, 1 - (age_hours / 48)) 
+            
+            # Recency bias: Priority drops but never goes to zero.
+            # News from a year ago will have a multiplier around 0.1, 
+            # while news from today stays near 1.0.
+            recency_multiplier = max(0.1, 1 / (1 + (age_hours / 24))) 
             
             final_score = semantic_sim * recency_multiplier
             scored_results.append((final_score, res))
 
+        # Re-sort: Current + Relevant news will naturally rise to the top.
         scored_results.sort(key=lambda x: x[0], reverse=True)
         valid = [item[1] for item in scored_results]
 
         if not valid:
-            print(f"DATA GAP: No confidence-cleared news found for '{user_prompt}'.")
+            print(f"DATA GAP: No relevant news found for '{user_prompt}'.")
             return
 
-        context = "\n".join([v['text'] for v in valid[:12]])
+        context = "\n".join([v['text'] for v in valid[:15]])
         unique_links = list({v['metadata']['url']: v for v in valid}.keys())[:3]
 
         report = client.models.generate_content(
@@ -206,7 +197,7 @@ def run_scout_analyst(user_prompt):
         )
 
         print(f"\n{report.text.strip()}\n")
-        print("VERIFIED SOURCES (RANKED BY RECENCY AND RELEVANCE):")
+        print("VERIFIED SOURCES (PRIORITIZED BY RECENCY AND RELEVANCE):")
         for link in unique_links: print(f"  - {link}")
 
     except Exception as e: print(f"System Error: {e}")
@@ -222,11 +213,9 @@ def ask_oracle(query):
         r_n = requests.post(f"http://127.0.0.1:{PORT_NEWS}/v1/retrieve", json={"query": query, "k": 5})
         context += "\n--- NEWS ---\n" + "\n".join([h['text'] for h in r_n.json()])
     except: pass
-
     if not context.strip():
         print("No matching information found.")
         return
-
     resp = client.models.generate_content(model=MODEL, contents=f"Answer based on:\n{context}\n\nQ: {query}")
     print(f"\n{resp.text.strip()}")
 
