@@ -1,13 +1,13 @@
 FROM python:3.12-slim
 
-# 1. System Dependencies
+# System Dependencies
 RUN apt-get update && apt-get install -y \
     build-essential cmake pkg-config curl git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 2. Optimized Pip Installs
+# Optimized Pip Installs
 RUN pip install --upgrade pip
 RUN pip install --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple pyarrow
 
@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install -U "pathway[xpack-llm, xpack-llm-docs]" litellm nest_asyncio
 RUN pip install -r requirements.txt
 
-# 3. Pre-load the AI Model (Prevents startup timeout)
+# Pre-load the AI Model (Prevents startup timeout)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
 COPY . .
@@ -24,5 +24,4 @@ COPY . .
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# 4. Use the dynamic port assigned by Render
 CMD python frontend/main.py
