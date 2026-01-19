@@ -133,7 +133,7 @@ def start_backend_engine():
     threading.Thread(target=news_connector.run, daemon=True).start()
     threading.Thread(target=user_connector.run, daemon=True).start()
     
-    print(f"✅ Intelligence Engine Active on Ports {PORT_NEWS}/{PORT_USER}")
+    print(f"Intelligence Engine Active on Ports {PORT_NEWS}/{PORT_USER}")
 
 # Auto-start on load
 if "ENGINE_LIVE" not in os.environ:
@@ -155,7 +155,7 @@ def run_scout_analyst(user_prompt):
         start_count = news_connector.ingestion_count
         news_connector.update_queries(keywords)
 
-        print("⏳ Waiting for initial intelligence sync...")
+        print("Waiting for initial intelligence sync...")
     
         # Wait until at least 3-5 new articles have been indexed
         max_wait = 60  # Safety timeout
