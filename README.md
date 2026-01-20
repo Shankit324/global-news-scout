@@ -116,7 +116,7 @@ pyrhon3.12 ./frontend/main.py
 
 1. **Dynamic Tracking:** The system prompts Gemini to convert a single user topic into **5 precise search keywords**, ensuring diverse and comprehensive news coverage.
 2. **Automated Scraping:** The `GlobalScoutSubject` runs a cycle every **60 seconds**, scraping Google News, deduplicating URLs, and injecting new vector embeddings in real-time.
-3. **Recency Ranking:** Articles are ranked using a custom **Recency Decay Formula** that prioritizes breaking news (0–24h) while still retaining high-relevance historical context:<br \>
+3. **Recency Ranking:** Articles are ranked using a custom **Recency Decay Formula** that prioritizes breaking news (0–24h) while still retaining high-relevance historical context: <br>
    $$Score_{final} = Similarity \times \frac{1}{1 + \left( \frac{Age_{hours}}{24} \right)}$$
 
 ### Intelligent Query Routing
