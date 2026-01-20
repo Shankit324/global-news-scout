@@ -114,9 +114,10 @@ pyrhon3.12 ./frontend/main.py
 
 ### GNews Intelligence Analyst
 
-1. **Dynamic Tracking:** The system monitors evolving 2026 trends by generating 5 precise search keywords via Gemini based on user prompts.
-2. **Automated Scraping:** The `GlobalScoutSubject` class scrapes Google News every **45–60 seconds** to ensure the vector store remains current.
-3. **Analytical Reporting:** The Live Intelligence Analysis route synthesizes news context into reports featuring **Sentiment Analysis** and verified source links.
+1. **Dynamic Tracking:** The system prompts Gemini to convert a single user topic into **5 precise search keywords**, ensuring diverse and comprehensive news coverage.
+2. **Automated Scraping:** The `GlobalScoutSubject` runs a cycle every **60 seconds**, scraping Google News, deduplicating URLs, and injecting new vector embeddings in real-time.
+3. **Recency Ranking:** Articles are ranked using a custom **Recency Decay Formula** that prioritizes breaking news (0–24h) while still retaining high-relevance historical context:
+   $$Final\_Score = Semantic\_Similarity \times \frac{1}{1 + (\frac{Age\_Hours}{24})}$$
 
 ### Intelligent Query Routing
 
