@@ -131,7 +131,7 @@ pyrhon3.12 ./frontend/main.py
 | :--- | :--- |
 | **Stream Processing** | [Pathway](https://www.pathway.com/) |
 | **LLM Engine** | Google Gemini 2.5 Flash Lite |
-| **API Framework** | FastAPI |
+| **API Framework** | FastAPI (via Pathway VectorStore) |
 | **Vector Store** | Pathway VectorStoreServer |
 | **Embeddings** | Sentence-Transformers (`all-MiniLM-L6-v2`) |
 | **UI** | Gradio |
